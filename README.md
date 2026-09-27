@@ -75,7 +75,8 @@ Push the repo to GitHub, create a **Web Service** from it, and use:
 | Setting | Value |
 |---|---|
 | Root Directory | *(leave empty — repo root)* |
-| Build Command | `pip install -r requirements.txt && python -m rag_agent.ingest.run_ingest` |
+| Python version | `3.12` — pinned by `.python-version` in the repo (**required**: Render's default 3.14 can't install `fastembed==0.8.1` + `streamlit==1.49.1` — pillow conflict) |
+| Build Command | `python -m pip install --upgrade pip && pip install -r requirements.txt && python -m rag_agent.ingest.run_ingest` |
 | Start Command | `streamlit run streamlit_app.py --server.address 0.0.0.0 --server.port $PORT --server.headless true` |
 
 Environment variables: `LLM_API_KEY`, `LLM_MODEL` (`openai/gpt-oss-20b`),

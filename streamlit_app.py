@@ -12,6 +12,7 @@ from __future__ import annotations
 import streamlit as st
 
 from rag_agent.app.ask import ask
+from rag_agent.ingest.store import collection_count
 
 _EXAMPLES = [
     "What is the expense ratio of HDFC Large Cap Fund Direct Growth?",
@@ -31,6 +32,18 @@ st.set_page_config(page_title="HDFC Fund Facts", page_icon="📊")
 st.title("HDFC Fund Facts")
 st.markdown("Ask factual questions about five HDFC mutual fund schemes.")
 st.caption("**Facts-only. No investment advice.**")
+
+# Startup self-check (cheap — no model load): surfaces the server's index state
+# immediately, so a "not built" server shows a warning instead of spinning.
+try:
+    _index_size = collection_count()
+except Exception:  # noqa: BLE001 — chroma unavailable: report, don't crash
+    _index_size = 0
+if _index_size > 0:
+    st.caption(f"✅ Index ready: {_index_size} chunks")
+else:
+    st.warning("⚠️ Index not built on this server — questions can't be answered until "
+               "`python -m rag_agent.ingest.run_ingest` runs.")
 
 # Session-only chat history (never written to disk).
 st.session_state.setdefault("history", [])

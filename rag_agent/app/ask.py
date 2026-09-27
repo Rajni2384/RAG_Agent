@@ -27,6 +27,11 @@ _NOT_FOUND_TEXT = (
     "lock-in period, minimum SIP, or holdings for one of the five HDFC schemes."
 )
 
+_INDEX_MISSING_TEXT = (
+    "The knowledge index is not built on this server. Run "
+    "`python -m rag_agent.ingest.run_ingest` during the deploy and redeploy."
+)
+
 
 def ask(question: str) -> QueryResponse:
     """Answer a question or refuse it. Never calls the LLM on unsafe/unknown input."""
@@ -36,7 +41,12 @@ def ask(question: str) -> QueryResponse:
         return refusal
 
     # 2) Retrieve the nearest chunks (closest first).
-    hits = search(question, n_results=TOP_K)
+    try:
+        hits = search(question, n_results=TOP_K)
+    except ValueError as exc:  # Chroma: collection missing on this server
+        if "does not exist" in str(exc):
+            return QueryResponse(kind=KIND_NOT_FOUND, text=_INDEX_MISSING_TEXT)
+        raise
 
     # 3) No useful hits → not_found, no LLM, no invented numbers.
     if not hits or hits[0].distance > MAX_DISTANCE:

@@ -1,4 +1,9 @@
-"""Embeddings via all-MiniLM-L6-v2 (Phase 3).
+"""Embeddings via all-MiniLM-L6-v2 in ONNX (fastembed) — Phase 3.
+
+Swapped from sentence-transformers (PyTorch) to fastembed (ONNX Runtime) so
+the app fits inside 512 MB containers (Render free plan). It is the SAME
+Hugging Face model, so the 384-dim vectors and cosine similarity behaviour are
+unchanged; the index must be rebuilt once after this swap (run_ingest).
 
 The model name lives ONLY here. Later phases (query) import ``encode_texts``
 from this module so ingest and retrieval share one model, one dimension.
@@ -13,26 +18,22 @@ _model = None
 
 
 def _get_model():
-    """Lazy-singleton SentenceTransformer (loaded once per process)."""
+    """Lazy-singleton fastembed TextEmbedding (loaded once per process)."""
     global _model
     if _model is None:
-        from sentence_transformers import SentenceTransformer
+        from fastembed import TextEmbedding
 
-        _model = SentenceTransformer(MODEL_NAME)
+        _model = TextEmbedding(model_name=MODEL_NAME)
     return _model
 
 
 def encode_texts(texts: list[str]) -> list[list[float]]:
     """Batch-encode strings into a list of 384-dim float vectors."""
+    # fastembed normalizes by default (cosine-ready), matching the old
+    # SentenceTransformer(normalize_embeddings=True) behaviour.
     model = _get_model()
-    vectors = model.encode(
-        texts,
-        batch_size=32,
-        show_progress_bar=False,
-        convert_to_numpy=True,
-        normalize_embeddings=True,
-    )
-    return [vector.tolist() for vector in vectors]
+    vectors = model.embed(texts, batch_size=32)  # generator of numpy arrays
+    return [vector.astype("float32").tolist() for vector in vectors]
 
 
 if __name__ == "__main__":

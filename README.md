@@ -45,9 +45,11 @@ python -m rag_agent.ingest.run_ingest
 
 This loads the 5 saved HTML snapshots (`data/snapshots/`), cleans them, splits
 into ~409 chunks, embeds with `all-MiniLM-L6-v2`, and persists the vectors into
-`data/chroma/`. On first run it also downloads the MiniLM model (~90 MB). Reruns
-do **not** duplicate chunks. A copy of every chunk + its embedding, readable as
-text, is written to `data/chunks_export.txt` (via
+`data/chroma/`. On first run it also downloads the MiniLM ONNX model (~83 MB).
+The embedder runs on **ONNX Runtime (fastembed), no PyTorch**, so the whole app
+sits at ~250 MB RAM and fits Render's free 512 MB plan. Reruns do **not**
+duplicate chunks. A copy of every chunk + its embedding, readable as text, is
+written to `data/chunks_export.txt` (via
 `python -m rag_agent.ingest.export_chunks`).
 
 ### Run the chat UI
@@ -65,6 +67,22 @@ only (nothing written to disk).
 ```bash
 python -m rag_agent.app.ask "What is the lock-in for HDFC ELSS Tax Saver?"
 ```
+
+### Deploy on Render (free plan — fits in 512 MB)
+
+Push the repo to GitHub, create a **Web Service** from it, and use:
+
+| Setting | Value |
+|---|---|
+| Root Directory | *(leave empty — repo root)* |
+| Build Command | `pip install -r requirements.txt && python -m rag_agent.ingest.run_ingest` |
+| Start Command | `streamlit run streamlit_app.py --server.address 0.0.0.0 --server.port $PORT --server.headless true` |
+
+Environment variables: `LLM_API_KEY`, `LLM_MODEL` (`openai/gpt-oss-20b`),
+`LLM_BASE_URL` (`https://api.groq.com/openai/v1`). The build command bakes the
+Chroma index + the ONNX model into the image, so the runtime needs no
+downloads. First question after a cold start is slower (one-time model load);
+later ones are under a second.
 
 ---
 
@@ -88,7 +106,7 @@ Machine-readable copy: `data/sources.csv`. Human-readable copy: `SOURCES.md`.
 |-------|--------|--------------|
 | 1. Load / clean | `rag_agent/ingest/load.py` | Read saved HTML snapshots → plain text documents |
 | 2. Chunk | `rag_agent/ingest/chunk.py` | 400–600-char chunks, 80–100 overlap, scheme prefix + metadata |
-| 3. Embed / store | `rag_agent/ingest/embed.py`, `store.py` | `all-MiniLM-L6-v2` → 384-dim vectors → persistent Chroma collection `hdfc_mf_faqs` |
+| 3. Embed / store | `rag_agent/ingest/embed.py`, `store.py` | `all-MiniLM-L6-v2` via ONNX (fastembed, no PyTorch) → 384-dim vectors → persistent Chroma collection `hdfc_mf_faqs` |
 | 4. Retrieve | `rag_agent/retrieve/search.py` | Top-4 nearest chunks (capped at distance ≤ 0.70) |
 | 5. Guardrails | `rag_agent/safety/` | Refuses advice, performance, and PII **before** any retrieval |
 | 6. Generate / cite | `rag_agent/generate/` + `rag_agent/app/ask.py` | LLM answers from retrieved chunks only, ≤ 3 sentences, one citation |
